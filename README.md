@@ -1,101 +1,43 @@
+ผมได้อ่านและทำความเข้าใจบทความที่คุณส่งมาแล้วครับ เนื่องจากผมไม่สามารถสร้างไฟล์ในรูปแบบ docstackedit ได้ ผมจึงได้ทำการจัดรูปแบบบทความที่คุณให้มาใหม่ให้ดูเป็นระเบียบและอ่านง่ายขึ้น โดยคงเนื้อหาและข้อมูลต้นฉบับไว้ทั้งหมดครับ
 
+วิธีใช้คำสั่ง wget ดาวน์โหลด MikroTik CHR Image (RAW .img.zip)
+บทความนี้จะอธิบายวิธีการใช้คำสั่ง wget เพื่อดาวน์โหลดไฟล์ MikroTik CHR (Cloud Hosted Router) โดยตรงจากเว็บไซต์ทางการของ MikroTik โดยคุณสามารถใช้คำสั่งนี้ได้บน Shell ของ Proxmox หรือ Linux Server
 
+คำสั่ง wget สำหรับดาวน์โหลด CHR Image
+ตัวอย่างด้านล่างคือคำสั่งที่ใช้ดาวน์โหลดไฟล์ CHR เวอร์ชัน 7.16.1 Stable ซึ่งเป็นเวอร์ชันล่าสุดในขณะที่บทความนี้ถูกเขียน:
 
-1️⃣ ฝั่ง Proxmox
+Bash
 
-สร้าง bridge สำหรับ LAN ใหม่
+wget https://download.mikrotik.com/routeros/7.16.1/chr-7.16.1.img.zip
+หากคุณต้องการดาวน์โหลดเวอร์ชันอื่น คุณสามารถ เปลี่ยนเลขเวอร์ชันใน URL ได้ตามต้องการ เช่น:
 
-ไปที่ Datacenter → Node → Network → Create → Linux Bridge
+Bash
 
-ตั้งชื่อ เช่น vmbr1
+wget https://download.mikrotik.com/routeros/7.15.2/chr-7.15.2.img.zip
+คำแนะนำ: คุณควรตรวจสอบเวอร์ชันล่าสุดจากหน้า [Download Archive ของ MikroTik] เพื่อนำเลขเวอร์ชันที่ถูกต้องมาแทนที่ใน URL
 
-Bridge ports: ว่าง (none) → จะต่อ VM/CT โดยตรง
+ขั้นตอนเต็ม (บน Shell ของ Proxmox หรือ Linux Server)
+นี่คือลำดับขั้นตอนที่คุณสามารถทำตามได้ทั้งหมดเพื่อดาวน์โหลดและเตรียมไฟล์ CHR:
 
-VLAN aware: เลือก No (ถ้าไม่ใช้ VLAN แยก)
+อัปเดตแพ็กเกจและติดตั้ง unzip (หากยังไม่มี)
 
-Apply และ reboot network ถ้าจำเป็น
+ก่อนอื่น ให้รันคำสั่งด้านล่างเพื่ออัปเดตระบบและติดตั้งเครื่องมือที่จำเป็นสำหรับการแตกไฟล์ .zip:
 
-ผูก VM/CT เข้ากับ bridge
+Bash
 
-VM/CT → Hardware → Network Device
+apt update && apt install -y unzip
+ดาวน์โหลด CHR image
 
-Bridge → เลือก vmbr1
+ใช้คำสั่ง wget เพื่อดาวน์โหลดไฟล์ CHR พร้อมทั้งเปลี่ยนชื่อไฟล์ที่ดาวน์โหลดมาให้เป็น chr.img.zip โดยอัตโนมัติ:
 
-Model → VirtIO (แนะนำ)
+Bash
 
-2️⃣ ฝั่ง MikroTik CHR
+wget https://download.mikrotik.com/routeros/7.16.1/chr-7.16.1.img.zip -O chr.img.zip
+คลายไฟล์ ZIP
 
-ตั้ง IP LAN ใหม่
+เมื่อดาวน์โหลดเสร็จสิ้น ให้ใช้คำสั่ง unzip เพื่อแตกไฟล์ chr.img.zip ซึ่งจะทำให้ได้ไฟล์ chr-7.16.1.img อยู่ในโฟลเดอร์เดียวกัน:
 
-/ip address add address=192.168.10.1/24 interface=ether2
+Bash
 
-
-ether2 → LAN ของ VM/CT
-
-สร้าง DHCP Pool
-
-/ip pool add name=dhcp_pool1 ranges=192.168.10.2-192.168.10.254
-
-
-สร้าง DHCP Server
-
-/ip dhcp-server add name=dhcp1 interface=ether2 address-pool=dhcp_pool1 lease-time=30m
-
-
-ตั้ง DHCP Network
-
-/ip dhcp-server network add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=8.8.8.8,1.1.1.1
-
-
-เปิด DHCP Server
-
-/ip dhcp-server enable dhcp1
-
-
-ตั้ง NAT ออก WAN
-
-/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade
-
-3️⃣ ตรวจสอบ
-
-เช็ก DHCP Server
-
-/ip dhcp-server print
-
-
-ต้องเห็น running=yes
-
-เช็ก IP ของ VM/CT
-
-ip a
-
-
-ต้องได้ IP ในช่วง 192.168.10.2–254
-
-ทดสอบ Internet
-
-ping 192.168.10.1  # gateway
-ping 8.8.8.8       # Internet
-ping google.com    # DNS
-
-4️⃣ (ถ้ามี) เช็ก VLAN
-/interface vlan print
-
-
-ถ้าไม่ได้ใช้งาน VLAN บน ether1/ether2 → สามารถลบได้
-
-/interface vlan remove vlan10
-
-✅ ผลลัพธ์สุดท้าย
-
-VM/CT ได้ IP จาก MikroTik DHCP
-
-ออก Internet ผ่าน WAN ของ Tenda
-
-วง LAN ใหม่ (192.168.10.0/24) แยกจาก WAN 192.168.0.0/24
-
-DHCP, NAT, DNS พร้อมใช้งาน
-
-ถ้าคุณต้องการ ผมสามารถทำ version diagram + table ให้ดู ภาพรวมทั้งหมด จะเห็น Proxmox ↔ MikroTik ↔ Tenda ชัดเจนครับ.
-
-คุณอยากให้ผมวาดให้ไหม?
+unzip chr.img.zip -d .
+หลังจากนี้ ไฟล์ chr-7.16.1.img ก็จะพร้อมใช้งานในโฟลเดอร์ปัจจุบันของคุณแล้วครับ
